@@ -1,5 +1,5 @@
 library(shiny)
-
+library(stringr)
 
 # Define UI for app that draws a histogram ----
 ui <- fluidPage(
@@ -55,13 +55,13 @@ server <- function(input, output,session) {
   #library(tidyr)
   
   Sys.setenv(CAS_CLIENT_SSL_CA_LIST='/opt/anaconda3/my_CAS_Viya4_cert.pem')   
-  cassess<-CAS("example.viya.com",5570,username="",password="")
+  cassess<-CAS("cas.com,",5570,username="psfss",password="psfsf")
   
   
   
   list_caslibs<-cas.table.caslibInfo(cassess)
   
-  updateSelectInput(session = session, inputId = "caslibname", choices = list_caslibs$CASLibInfo$Name)
+  updateSelectInput(session = session, inputId = "caslibname", choices = list_caslibs$CASLibInfo$Name[str_order(list_caslibs$CASLibInfo$Name)])
   
   
   
@@ -73,7 +73,7 @@ server <- function(input, output,session) {
   {
     currentCaslib <- req(input$caslibname)
     list_tables<-cas.table.tableInfo(cassess,caslib=currentCaslib)
-    updateSelectInput(session = session, inputId = "tablename", choices = req(list_tables$TableInfo$Name))
+    updateSelectInput(session = session, inputId = "tablename", choices = req(list_tables$TableInfo$Name[str_order(list_tables$TableInfo$Name)]))
     
   }
   )
@@ -96,7 +96,7 @@ server <- function(input, output,session) {
                  table_info=cas.table.columnInfo(cassess,table=c(name=req(input$tablename),caslib=input$caslibname))
                  columns=table_info$ColumnInfo;
                  columns=columns[columns$Type=='double',]
-                 updateSelectInput(session = session, inputId = "colname", choices = columns$Column)
+                 updateSelectInput(session = session, inputId = "colname", choices = columns$Column[str_order(columns$Column)])
                 
                })
 
