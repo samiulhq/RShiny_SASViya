@@ -1,8 +1,9 @@
 library(shiny)
+library(sasr)
 library(stringr)
-library(shinymanager)
 
-
+#get a sas compute sesssion
+my_sas_session <- get_sas_session()
 
 # Define UI for app that draws a histogram ----
 ui <- fluidPage(
@@ -10,7 +11,9 @@ ui <- fluidPage(
   titlePanel("SAS Tables Histogram Viewer"),
   
   selectInput("caslibname", "Select a CASLIB", choices = c("Loading CASLIB List")),
+ 
   selectInput("tablename", "Select a Table", choices = c("Select CASLILB first")),
+ 
   selectInput("colname", "Select a Column", choices = c("Select a table first")),
   # App title ----
   
@@ -34,7 +37,13 @@ ui <- fluidPage(
     mainPanel(
       
       # Output: Histogram ----
-      plotOutput(outputId = "distPlot")
+      plotOutput(outputId = "distPlot"),
+      actionButton("doMean", "Run PROC MEANS"),
+      h4("Result:"),
+      verbatimTextOutput("Log"),
+      h4("Log:"),
+      verbatimTextOutput("Result")
+     
       
     )
   )
@@ -42,31 +51,34 @@ ui <- fluidPage(
 
 # Define server logic required to draw a histogram ----
 server <- function(input, output,session) {
- 
+
   library(swat)
+  #library(getPass)
+  #library(tidyr)
   
-  
-  Sys.setenv(CAS_CLIENT_SSL_CA_LIST='/opt/anaconda3/my_CAS_Viya4_cert.pem')   
+
   cassess<-CAS("example.sas.com",5570,username="username",password="password")
   
   
-  
+
   list_caslibs<-cas.table.caslibInfo(cassess)
+  
   updateSelectInput(session = session, inputId = "caslibname", choices = list_caslibs$CASLibInfo$Name[str_order(list_caslibs$CASLibInfo$Name)])
+  
   
   observeEvent(input$caslibname,
   {
-    currentCaslib <- req(input$caslibname)
+    currentCaslib <- input$caslibname
     list_tables<-cas.table.tableInfo(cassess,caslib=currentCaslib)
-    updateSelectInput(session = session, inputId = "tablename", choices = req(list_tables$TableInfo$Name[str_order(list_tables$TableInfo$Name)]))
+    updateSelectInput(session = session, inputId = "tablename", choices = list_tables$TableInfo$Name[str_order(list_tables$TableInfo$Name)])
     
   }
   )
   
+  
   observeEvent(input$tablename,
                {
-               
-                 table_info=cas.table.columnInfo(cassess,table=c(name=req(input$tablename),caslib=input$caslibname))
+                   table_info=cas.table.columnInfo(cassess,table=c(name=req(input$tablename),caslib=input$caslibname))
                  columns=table_info$ColumnInfo;
                  columns=columns[columns$Type=='double',]
                  updateSelectInput(session = session, inputId = "colname", choices = columns$Column[str_order(columns$Column)])
@@ -96,10 +108,22 @@ server <- function(input, output,session) {
          main = paste("Histogram",input$tablename,".",input$colname), ylab="")
     
   })}
-  
   }
-  
   )
+  observeEvent(input$doMean, {
+    
+    sascode=paste0("cas;caslib _all_assing; proc freq data=",strsplit(input$caslibname, "\\(")[[1]][1],".",input$tablename,";run;")
+    
+    result <- run_sas(sascode)
+    cat(result$LOG)
+    cat(result$LST)
+        #output$text1 <- renderHTML({(result$LOG)})
+    output$Log <- renderText({ result$LOG })
+    output$Result <- renderText({ result$LST })
+    #output$text1 <- renderText({ gsub(pattern = "\\n", replacement = "<br/>", result$LOG) })
+    
+  })
+  
   
 }
 
