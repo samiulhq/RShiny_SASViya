@@ -55,7 +55,7 @@ server <- function(input, output,session) {
   #library(tidyr)
   
   Sys.setenv(CAS_CLIENT_SSL_CA_LIST='/opt/anaconda3/my_CAS_Viya4_cert.pem')   
-  cassess<-CAS("mipistcas.eastus.cloudapp.azure.com",5570,username="sahaqu",password="sahaqu")
+  cassess<-CAS("example.viya.com",5570,username="",password="")
   
   
   
