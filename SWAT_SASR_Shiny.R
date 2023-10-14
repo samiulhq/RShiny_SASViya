@@ -1,21 +1,24 @@
 library(shiny)
 library(sasr)
 library(stringr)
+library(swat)
+#library(getPass)
+#library(tidyr)
 
 #get a sas compute sesssion
 my_sas_session <- get_sas_session()
 
+#cassess<-CAS("example.sas.com",5570,username="username",password="password")
+list_caslibs<-cas.table.caslibInfo(cassess)
+dataflag=1
+
 # Define UI for app that draws a histogram ----
 ui <- fluidPage(
-  
+  # App title ----
   titlePanel("SAS Tables Histogram Viewer"),
   
-  selectInput("caslibname", "Select a CASLIB", choices = c("Loading CASLIB List")),
+
  
-  selectInput("tablename", "Select a Table", choices = c("Select CASLILB first")),
- 
-  selectInput("colname", "Select a Column", choices = c("Select a table first")),
-  # App title ----
   
   
   # Sidebar layout with input and output definitions ----
@@ -23,21 +26,30 @@ ui <- fluidPage(
     
     # Sidebar panel for inputs ----
     sidebarPanel(
+      selectInput("caslibname", "Select a CASLIB", choices = c("Loading CASLIB List")),
       
+      selectInput("tablename", "Select a Table", choices = c("Select CASLILB first")),
+      
+      selectInput("colname", "Select a Column", choices = c("Select a table first")),
       # Input: Slider for the number of bins ----
       sliderInput(inputId = "bins",
                   label = "Number of bins:",
                   min = 1,
                   max = 50,
-                  value = 30)
+                  value = 30),
       
+    checkboxInput("showdata",
+                               label = "Show Data",
+                               value = FALSE)
     ),
-    
     # Main panel for displaying outputs ----
     mainPanel(
       
       # Output: Histogram ----
       plotOutput(outputId = "distPlot"),
+      DT::dataTableOutput(outputId="demo_datatable",
+                          width = "50%",
+                          height = "auto"),
       actionButton("doMean", "Run PROC MEANS"),
       h4("Result:"),
       verbatimTextOutput("Log"),
@@ -52,17 +64,8 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram ----
 server <- function(input, output,session) {
 
-  library(swat)
-  #library(getPass)
-  #library(tidyr)
-  
 
-  cassess<-CAS("example.sas.com",5570,username="username",password="password")
-  
-  
-
-  list_caslibs<-cas.table.caslibInfo(cassess)
-  
+  print(list_caslibs)
   updateSelectInput(session = session, inputId = "caslibname", choices = list_caslibs$CASLibInfo$Name[str_order(list_caslibs$CASLibInfo$Name)])
   
   
@@ -86,12 +89,51 @@ server <- function(input, output,session) {
                })
 
   
+  observeEvent(input$tablename,{
+    
+    
+    if(input$showdata==TRUE){
+      flag=1;
+      ct <- defCasTable(cassess,caslib=input$caslibname,input$tablename)
+      ctdf<-to.casDataFrame(ct,obs = 1000)
+      output$demo_datatable <- DT::renderDataTable({
+        ctdf
+      }, options = list(pageLength = 10))
+      
+    }
+  })
+  
+  
+  observeEvent(input$showdata,
+               {
+                 print(input$showdata)
+                 if(input$showdata==TRUE){
+                   flag=1;
+                 ct <- defCasTable(cassess,caslib=input$caslibname,input$tablename)
+                 ctdf<-to.casDataFrame(ct,obs = 1000)
+                 output$demo_datatable <- DT::renderDataTable({
+                   ctdf
+                 }, options = list(pageLength = 10))
+                 
+                 }
+                 else{
+                   
+                   ctdf<- NULL
+                   output$demo_datatable <- DT::renderDataTable({
+                     ctdf
+                   }, options = list(pageLength = 10))
+                 }
+                 
+               })
+  
+  
   
   observeEvent(input$colname,{
     
     if(input$tablename!='Select CASLILB first'){
       cas_table <- defCasTable(cassess,caslib=input$caslibname,input$tablename)
       df<-to.casDataFrame((cas_table[,input$colname]))
+      
       
     }
     
