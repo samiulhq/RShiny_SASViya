@@ -2,23 +2,33 @@ library(shiny)
 library(sasr)
 library(stringr)
 library(swat)
-#library(getPass)
-#library(tidyr)
+library(ggplot2)
+library(hrbrthemes)
 
 #get a sas compute sesssion
 my_sas_session <- get_sas_session()
 
-#cassess<-CAS("example.sas.com",5570,username="username",password="password")
+
+###test if the session is active################################################
+er<-try({run_sas("")},silent=TRUE)
+
+if(class(er)=='try-error'){ 
+  if(any(grepl("package:sasr", search()))) detach("package:sasr")
+  library(sasr)
+  print('Restarting SAS Compute Session....')
+  my_sas_session <- get_sas_session()
+}
+################################################################################
+
+
+cassess<-CAS("example.sas.com",5570,username="username",password="password")
 list_caslibs<-cas.table.caslibInfo(cassess)
 dataflag=1
-
+scatterflag=0;
 # Define UI for app that draws a histogram ----
 ui <- fluidPage(
   # App title ----
-  titlePanel("SAS Tables Histogram Viewer"),
-  
-
- 
+  titlePanel("SAS Data Viewer"),
   
   
   # Sidebar layout with input and output definitions ----
@@ -40,20 +50,41 @@ ui <- fluidPage(
       
     checkboxInput("showdata",
                                label = "Show Data",
-                               value = FALSE)
+                               value = FALSE),
+    checkboxInput("showscatter",
+                  label = "Scatterplot",
+                  value = FALSE),
+    uiOutput("xaxis"),
+    uiOutput("yaxis"),
+    actionButton("doMean", "Run PROC MEANS", class="btn btn-primary"),
     ),
     # Main panel for displaying outputs ----
     mainPanel(
       
       # Output: Histogram ----
       plotOutput(outputId = "distPlot"),
+      plotOutput(outputId = "scatterPlot"),
       DT::dataTableOutput(outputId="demo_datatable",
                           width = "50%",
                           height = "auto"),
-      actionButton("doMean", "Run PROC MEANS"),
-      h4("Result:"),
+     
+      textOutput("logheader"),
+      tags$head(tags$style("#logheader{color: blue;
+                                 font-size: 20px;
+                                 font-style: italic;
+                                 }"
+      )
+      )
+    ,
       verbatimTextOutput("Log"),
-      h4("Log:"),
+      textOutput("resultheader"),
+    tags$head(tags$style("#resultheader{color: blue;
+                                 font-size: 20px;
+                                 font-style: italic;
+                                 }"
+    )
+    ),
+    
       verbatimTextOutput("Result")
      
       
@@ -81,7 +112,7 @@ server <- function(input, output,session) {
   
   observeEvent(input$tablename,
                {
-                   table_info=cas.table.columnInfo(cassess,table=c(name=req(input$tablename),caslib=input$caslibname))
+                   table_info=cas.table.columnInfo(cassess,table=list(name=req(input$tablename),caslib=input$caslibname))
                  columns=table_info$ColumnInfo;
                  columns=columns[columns$Type=='double',]
                  updateSelectInput(session = session, inputId = "colname", choices = columns$Column[str_order(columns$Column)])
@@ -126,36 +157,47 @@ server <- function(input, output,session) {
                  
                })
   
-  
-  
   observeEvent(input$colname,{
     
     if(input$tablename!='Select CASLILB first'){
       cas_table <- defCasTable(cassess,caslib=input$caslibname,input$tablename)
       df<-to.casDataFrame((cas_table[,input$colname]))
       
-      
     }
     
     
-  print(input$colname)
-  if(input$colname!="Select a table first"){  
-  output$distPlot <- renderPlot({
-  
-    x    <- df[,input$colname]
-    bins <- seq(min(x, na.rm = TRUE), max(x,na.rm = TRUE), length.out = input$bins + 1)
-    print(x)
-    hist(x, breaks = unique(bins), col = "#75AADB", border = "white",
-         xlab = input$colname,
-         main = paste("Histogram",input$tablename,".",input$colname), ylab="")
+    #print(input$colname)
+    if(input$colname!="Select a table first" & input$tablename!="No table in this library" ){  
+      output$distPlot <- renderPlot({
+        
+        #x    <- df[,input$colname]
+        #x <-as.data.frame(x)
+        x    <- to.r.data.frame(cas_table[,input$colname])
+        bins <- seq(min(x, na.rm = TRUE), max(x,na.rm = TRUE), length.out = input$bins + 1)
+        print(x)
+        #hist(x, breaks = unique(bins), col = "#75AADB", border = "white",
+        #    xlab = input$colname,
+        #   main = paste("Histogram",input$tablename,".",input$colname), ylab="")
+        
+        ggplot(x, aes(.data[[input$colname]]),na.rm = TRUE) +
+          geom_histogram(bins = input$bins,
+                         fill = "steelblue3",
+                         colour = "grey30") +
+          xlab(input$colname) +
+          theme_minimal()
+        
+        
+      })}
     
-  })}
   }
+  
   )
+  
   observeEvent(input$doMean, {
-    
-    sascode=paste0("cas;caslib _all_assing; proc freq data=",strsplit(input$caslibname, "\\(")[[1]][1],".",input$tablename,";run;")
-    
+    output$logheader<-renderText("Log:")
+    output$resultheader<-renderText("Result:")
+    sascode=paste0("cas;caslib _all_ assign; proc freq data=",strsplit(input$caslibname, "\\(")[[1]][1],".",input$tablename,";run;")
+    cat(sascode)
     result <- run_sas(sascode)
     cat(result$LOG)
     cat(result$LST)
@@ -167,7 +209,62 @@ server <- function(input, output,session) {
   })
   
   
+  observeEvent(input$showscatter, {
+    table_info=cas.table.columnInfo(cassess,table=list(name=req(input$tablename),caslib=input$caslibname))    
+    columns=table_info$ColumnInfo;
+    columns=columns[columns$Type=='double',]
+    print(columns)
+    print(input$showscatter)
+    if(input$showscatter==TRUE){
+      
+      output$xaxis <- renderUI({
+        selectInput("xlabel", "X:", choices = columns$Column[str_order(columns$Column)])
+      })
+        output$yaxis <- renderUI({
+          selectInput("ylabel", "y:", choices = columns$Column[str_order(columns$Column)])
+          
+          
+      })
+      
+
+      
+      scatterflag=1
+      }
+    else{
+      output$scatterPlot<-NULL
+      output$xaxis<-NULL
+      output$yaxis<-NULL
+      scatterflag=0
+    }
+    
+    
+  })
+  
+  observeEvent(input$xlabel,{
+    
+     
+
+    #  print(dtbl)
+      output$scatterPlot <- renderPlot({
+        cas_table <- defCasTable(cassess,caslib=input$caslibname,input$tablename)
+        print('cas_table')
+        print(input$xlabel)
+        print(input$ylabel)
+        dtbl    <- to.r.data.frame(cas_table[,list(input$xlabel,input$ylabel)])
+    ggplot(dtbl, aes(x=.data[[input$xlabel]], y=.data[[input$ylabel]], na.rm = TRUE)) +
+      geom_point(size=6) +
+          theme_minimal()
+
+
+
+      })
+
+    }
+  )
+  
+ 
 }
 
 # Create Shiny app ----
 shinyApp(ui = ui, server = server)
+
