@@ -1,3 +1,6 @@
+### created by Samiul Haque
+## Last Update November 27, 2023
+
 library(shiny)
 library(sasr)
 library(stringr)
@@ -21,7 +24,7 @@ if(class(er)=='try-error'){
 ################################################################################
 
 
-cassess<-CAS("example.sas.com",5570,username="username",password="password")
+cassess<-CAS("www.examplesasviya.com",5570,username="",password="")
 list_caslibs<-cas.table.caslibInfo(cassess)
 dataflag=1
 scatterflag=0;
@@ -56,7 +59,7 @@ ui <- fluidPage(
                   value = FALSE),
     uiOutput("xaxis"),
     uiOutput("yaxis"),
-    actionButton("doMean", "Run PROC MEANS", class="btn btn-primary"),
+    actionButton("doMean", "Run PROC FREQ", class="btn btn-primary"),
     ),
     # Main panel for displaying outputs ----
     mainPanel(
@@ -85,8 +88,8 @@ ui <- fluidPage(
     )
     ),
     
-      verbatimTextOutput("Result")
-     
+      verbatimTextOutput("Result"),
+      htmlOutput("resulthtml")
       
     )
   )
@@ -198,14 +201,14 @@ server <- function(input, output,session) {
     output$resultheader<-renderText("Result:")
     sascode=paste0("cas;caslib _all_ assign; proc freq data=",strsplit(input$caslibname, "\\(")[[1]][1],".",input$tablename,";run;")
     cat(sascode)
-    result <- run_sas(sascode)
+    result <- run_sas(sascode,result="HTML")
     cat(result$LOG)
     cat(result$LST)
         #output$text1 <- renderHTML({(result$LOG)})
     output$Log <- renderText({ result$LOG })
-    output$Result <- renderText({ result$LST })
+    #output$Result <- renderText({ result$LST })
     #output$text1 <- renderText({ gsub(pattern = "\\n", replacement = "<br/>", result$LOG) })
-    
+    output$resulthtml<-renderUI(HTML(result$LST))
   })
   
   
