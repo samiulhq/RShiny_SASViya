@@ -24,6 +24,7 @@ if(class(er)=='try-error'){
 ################################################################################
 
 
+
 cassess<-CAS("www.examplesasviya.com",5570,username="",password="")
 list_caslibs<-cas.table.caslibInfo(cassess)
 dataflag=1
@@ -199,7 +200,7 @@ server <- function(input, output,session) {
   observeEvent(input$doMean, {
     output$logheader<-renderText("Log:")
     output$resultheader<-renderText("Result:")
-    sascode=paste0("cas;caslib _all_ assign; proc freq data=",strsplit(input$caslibname, "\\(")[[1]][1],".",input$tablename,";run;")
+    sascode=paste0("cas;caslib _all_ assign; proc freq data=",strsplit(input$caslibname,"\\(")[[1]][1],".'",input$tablename,"'n;tables _char_;run;")
     cat(sascode)
     result <- run_sas(sascode,result="HTML")
     cat(result$LOG)
